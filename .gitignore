@@ -1,0 +1,8 @@
+build/
+libs/
+inc/
+
+*.ini
+
+data/
+third_party/

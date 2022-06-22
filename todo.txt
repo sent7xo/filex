@@ -1,0 +1,13 @@
+FEATURES:
+- image button
+- quick search
+- bookmarks
+- docking
+- proper tab
+- context menu
+
+BUGS:
+- fix path with 2+ backslash
+- if strlen from first backslash is == 0
+- if first letter is backslash, i.e. "\\a\\", going up causes error
+- if path is invalid, don't save
