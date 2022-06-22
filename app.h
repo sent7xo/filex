@@ -93,6 +93,12 @@ struct App_State {
     Texture tex_up;
     Texture tex_edit;
 
+    Texture tex_copy;
+    Texture tex_paste;
+    Texture tex_rename;
+    Texture tex_cut;
+    Texture tex_delete;
+
     // @todo: binary tree?
     int selected[SELECTED_MAX_COUNT];
     int selected_count = 0;

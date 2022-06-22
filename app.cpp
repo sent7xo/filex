@@ -36,8 +36,9 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
 
-    ImVec2 button_size = ImVec2(image_size.x, image_size.y + 30);
     ImVec2 padding = style.FramePadding;
+    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, false, image_size.x - padding.x);
+    ImVec2 button_size = ImVec2(image_size.x, image_size.y + (text_size.y < 30 ? text_size.y : 30));
 
     result = ImGui::InvisibleButton(text, button_size + padding * 2);
 
@@ -45,9 +46,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     bool click = ImGui::IsItemClicked(0);
     ImU32 col = ImGui::GetColorU32((hover && click) ? ImGuiCol_ButtonActive :
                                    hover ? ImGuiCol_ButtonHovered :
-                                   ImGuiCol_Button,
-                                   9999);
-    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, false, button_size.x - padding.x);
+                                   ImGuiCol_Button);
 
     if (hover) {
         ImVec2 min = draw_list->GetClipRectMin();
@@ -66,7 +65,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
 
     draw_list->AddRectFilled(p,
                              ImVec2(p.x + button_size.x + padding.x * 2,
-                                    p.y + image_size.y + text_size.y + padding.y * 2),
+                                    p.y + (hover ? image_size.y + text_size.y : button_size.y) + padding.y * 2),
                              col,
                              ImClamp((float)ImMin(padding.x, padding.y), 0.0f, g.Style.FrameRounding));
 
@@ -77,7 +76,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     ImVec4 clipping = ImVec4(p.x + padding.x,
                              p.y + padding.y,
                              p.x + button_size.x - padding.x,
-                             p.y + button_size.y - padding.y);
+                             p.y + button_size.y + g.FontSize / 2 - padding.y);
 
     draw_list->AddText(g.Font,
                        g.FontSize,
@@ -289,6 +288,10 @@ void set_style (App_State *state)
 
     theme->files_button = ImVec4(0, 0, 0, 0);
     theme->files_button_hover = ImGui::GetStyle().Colors[ImGuiCol_Button];
+    theme->files_button_hover.x *= 0.7;
+    theme->files_button_hover.y *= 0.7;
+    theme->files_button_hover.z *= 0.7;
+    theme->files_button_hover.w = 1;
     theme->files_button_click = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
 
     theme->files_selected_button = theme->files_button_click;
@@ -309,11 +312,6 @@ void files_and_folders (App_State *state)
     ImGui::PushStyleColor(ImGuiCol_Button, state->theme.files_button);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, state->theme.files_button_hover);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, state->theme.files_button_click);
-
-    defer {
-        ImGui::PopStyleColor(3);
-        ImGui::PopStyleVar(2);
-    };
 
     char path[MAX_PATH];
     snprintf(path, MAX_PATH, "%s*", current_dir);
@@ -476,14 +474,136 @@ void files_and_folders (App_State *state)
                 ShellExecute(NULL, NULL, temp_path, NULL, NULL, SW_SHOW);
             }
         }
+        if (ImGui::IsItemHovered() &&
+            ImGui::IsMouseClicked(1))
+        {
+            state->selected_count = 0;
+            state->selected[state->selected_count++] = i;
+            ImGui::OpenPopup("File Context");
+        }
 
         if (found > -1) {
             ImGui::PopStyleColor(2);
         }
     }
 
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+
+    if (!ImGui::IsPopupOpen("File Context") &&
+        ImGui::IsWindowHovered() &&
+        ImGui::IsMouseClicked(1))
+    {
+        state->selected_count = 0;
+        ImGui::OpenPopup("File Context");
+    }
+
+    bool del = false;
+    ImVec2 main_icon_size = ImVec2(20, 20);
+    if (ImGui::BeginPopup("File Context")) {
+        if (state->selected_count > 0) {
+            bool close = false;
+            if (ImGui::ImageButton(state->tex_copy.id, main_icon_size)) close = true;
+            ImGui::SameLine();
+            if (ImGui::ImageButton(state->tex_paste.id, main_icon_size)) close = true;
+            ImGui::SameLine();
+            if (ImGui::ImageButton(state->tex_rename.id, main_icon_size)) close = true;
+            ImGui::SameLine();
+            if (ImGui::ImageButton(state->tex_cut.id, main_icon_size)) close = true;
+            ImGui::SameLine();
+            if (ImGui::ImageButton(state->tex_delete.id, main_icon_size)) {
+                ImGui::CloseCurrentPopup();
+                del = true;
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Open") &&
+                state->selected_count == 1) {
+                char temp_path[MAX_PATH];
+                char *last_backslash = get_last_slash(current_dir);
+                int last_backslash_count = last_backslash - current_dir;
+                strncpy_s(temp_path, current_dir, last_backslash_count);
+
+                if (state->selected[0] < folder_count) {
+                    snprintf(current_dir, PATH_MAX_SIZE, "%s%s\\", temp_path, folders[state->selected[0]]);
+                    add_back(state);
+                } else {
+                    strcat_s(temp_path, PATH_MAX_SIZE, files[state->selected[0] - folder_count]);
+                    ShellExecute(NULL, NULL, temp_path, NULL, NULL, SW_SHOW);
+                }
+            }
+
+            if (close) ImGui::CloseCurrentPopup();
+        } else {
+            ImGui::BeginDisabled(true);
+            ImGui::ImageButton(state->tex_copy.id, main_icon_size);
+            ImGui::SameLine();
+            ImGui::EndDisabled();
+            ImGui::ImageButton(state->tex_paste.id, main_icon_size);
+            ImGui::SameLine();
+            ImGui::BeginDisabled(true);
+            ImGui::ImageButton(state->tex_rename.id, main_icon_size);
+            ImGui::SameLine();
+            ImGui::ImageButton(state->tex_cut.id, main_icon_size);
+            ImGui::SameLine();
+            ImGui::ImageButton(state->tex_delete.id, main_icon_size);
+            ImGui::EndDisabled();
+
+            ImGui::Separator();
+
+            ImVec2 context_icon_size = ImVec2(16, 16);
+            ImGui::Image(state->tex_file.id, context_icon_size);
+            ImGui::SameLine();
+            ImGui::MenuItem("New File");
+
+            ImGui::Image(state->tex_folder.id, context_icon_size);
+            ImGui::SameLine();
+            ImGui::MenuItem("New Folder");
+
+            ImGui::Separator();
+
+            ImGui::MenuItem("Show in list view", "", &state->list_view);
+
+            ImGui::Separator();
+
+            // ImGui::Image(state->tex_folder.id, context_button_size);
+            // ImGui::SameLine();
+            ImGui::MenuItem("Properties");
+        }
+        ImGui::EndPopup();
+    }
+
+    if (del) ImGui::OpenPopup("Delete!");
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Delete!", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("All those beautiful files will be deleted.\nThis operation cannot be undone!\n\n");
+        ImGui::Separator();
+
+        static bool dont_ask_me_next_time = false;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+        ImGui::Checkbox("Don't ask me next time", &dont_ask_me_next_time);
+        ImGui::PopStyleVar();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8, 0, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 0, 0, 1));
+        if (ImGui::Button("OK", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        ImGui::PopStyleColor(3);
+        ImGui::SetItemDefaultFocus();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
     // @note: klik di luar buttons
-    if (ImGui::IsMouseClicked(0) && !is_selecting) {
+    if (!ImGui::IsPopupOpen("File Context") &&
+        ImGui::IsMouseClicked(0) &&
+        !is_selecting)
+    {
         state->selected_count = 0;
     }
 }
@@ -613,6 +733,12 @@ void app (SDL_Window *window)
     state.tex_file_zip = init_texture("D:\\programming\\c_cpp\\filex\\data\\zip.png");
     state.tex_file_word = init_texture("D:\\programming\\c_cpp\\filex\\data\\word.png");
 
+    state.tex_copy = init_texture("D:\\programming\\c_cpp\\filex\\data\\copy.png");
+    state.tex_paste = init_texture("D:\\programming\\c_cpp\\filex\\data\\paste.png");
+    state.tex_rename = init_texture("D:\\programming\\c_cpp\\filex\\data\\rename.png");
+    state.tex_cut = init_texture("D:\\programming\\c_cpp\\filex\\data\\cut.png");
+    state.tex_delete = init_texture("D:\\programming\\c_cpp\\filex\\data\\delete.png");
+
     state.tex_wallpaper = init_texture("D:\\programming\\c_cpp\\filex\\data\\wallpaper0.png");
 
     bool run = true;
@@ -693,6 +819,12 @@ void app (SDL_Window *window)
                     ImGui::MenuItem("Show tab list popup button",
                                     "",
                                     &state.show_tab_list_popup_button);
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Help")) {
+                    ImGui::MenuItem("FAQ", "");
+                    ImGui::MenuItem("Documentation", "");
+                    ImGui::MenuItem("About Filex", "");
                     ImGui::EndMenu();
                 }
                 ImGui::EndMainMenuBar();
