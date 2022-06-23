@@ -12,6 +12,7 @@ set common_flags= %debug_flags%
 :: lalu link imgui*.obj agar kompilasi main.cpp cepat
 :: cl %common_flags% /c /I..\ ../third_party/dear_imgui/imgui*.cpp
 
+:: /subsystem:windows /entry:mainCRTStartup 
 cl %common_flags% -I..\ ..\main.cpp /link /out:filex.exe imgui*.obj ..\libs\SDL2.lib ..\libs\SDL2main.lib opengl32.lib shell32.lib Ole32.lib
 
 popd

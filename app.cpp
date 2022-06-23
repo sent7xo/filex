@@ -49,7 +49,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
 
     result = ImGui::InvisibleButton(text, button_size + padding * 2);
 
-    bool hover = ImGui::IsItemHovered();
+    bool hover = ImGui::IsItemHovered() && !ImGui::IsAnyItemActive();
     bool click = ImGui::IsItemClicked(0);
     ImU32 col = ImGui::GetColorU32((hover && click) ? ImGuiCol_ButtonActive :
                                    hover ? ImGuiCol_ButtonHovered :
@@ -64,7 +64,8 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
                                  ImGuiWindowFlags_NoMove |
                                  ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoSavedSettings;
+                                 ImGuiWindowFlags_NoSavedSettings |
+                                 ImGuiWindowFlags_NoFocusOnAppearing;
         ImGui::Begin("Folder Name Hover", NULL, flags);
         draw_list = ImGui::GetWindowDrawList();
         draw_list->PushClipRect(min, max);
@@ -127,18 +128,18 @@ char *get_last_slash (char *str, bool include_slash = true)
 
 void change_dir (App_State *state)
 {
-    Back_History *back = &state->back;
+    // Back_History *back = &state->back;
 }
 
 void add_back (App_State *state)
 {
-    Back_History *back = &state->back;
+    Back_History *back = &state->tabs[state->current_tab].back;
 
     assert(back->cursor < back->count);
     back->count = back->cursor + 1;
 
     int index = (back->start + back->count) % HISTORY_MAX_COUNT;
-    strcpy_s(back->history[index], state->current_dir);
+    strcpy_s(back->history[index], state->tabs[state->current_tab].current_dir);
 
     if (back->count < HISTORY_MAX_COUNT) {
         back->cursor++;
@@ -146,38 +147,79 @@ void add_back (App_State *state)
     } else {
         back->start = (back->start + 1) % HISTORY_MAX_COUNT;
     }
-    printf("\"%s\" start: %d, cursor: %d, count: %d\n", back->history[index], back->start, back->cursor, back->count);
+    // printf("\"%s\" start: %d, cursor: %d, count: %d\n", back->history[index], back->start, back->cursor, back->count);
+}
+
+void add_tab (App_State *state, char *start_path = "D:\\")
+{
+    if (state->tab_count >= TAB_MAX_COUNT) return;
+
+    int index = 0;
+    while (index < TAB_MAX_COUNT && state->tabs[index].id != 0) index++;
+    if (index == TAB_MAX_COUNT) assert(!"Couldn't find empty tab to fill!");
+
+    // state->tab_indices[state->tab_count] = index;
+    Tab *tab = &state->tabs[index];
+
+    tab->id = state->tab_gen_id++;
+    strcpy_s(tab->current_dir, PATH_MAX_SIZE, start_path);
+
+    tab->back.start = 0;
+    tab->back.cursor = 0;
+    tab->back.count = 1;
+    strcpy_s(tab->back.history[0], start_path);
+
+    tab->selected_count = 0;
+
+    state->tab_count++;
+}
+
+void remove_tab (App_State *state, int index)
+{
+    assert(index > -1 && index < TAB_MAX_COUNT);
+
+    state->tabs[index].id = 0;
+    // int temp = index;
+    // while (temp < state->tab_count - 1) {
+    //     state->tab_indices[temp] = state->tab_indices[temp + 1];
+    // }
+
+    state->tab_count--;
 }
 
 void go_back (App_State *state)
 {
-    Back_History *back = &state->back;
+    Back_History *back = &state->tabs[state->current_tab].back;
     if (back->cursor <= 0) return;
 
     back->cursor--;
     int index = (back->start + back->cursor) % HISTORY_MAX_COUNT;
-    strcpy_s(state->current_dir, back->history[index]);
+    strcpy_s(state->tabs[state->current_tab].current_dir, back->history[index]);
 }
 
 void go_forward (App_State *state)
 {
-    Back_History *back = &state->back;
+    Back_History *back = &state->tabs[state->current_tab].back;
     if (back->cursor >= back->count - 1) return;
 
     back->cursor++;
     int index = (back->start + back->cursor) % HISTORY_MAX_COUNT;
-    strcpy_s(state->current_dir, back->history[index]);
+    strcpy_s(state->tabs[state->current_tab].current_dir, back->history[index]);
 }
 
 // @todo: "\Handbrake" is illegal!!! must be "D:\Handbrake"
 void path_bar (App_State *state)
 {
-    char *current_dir = state->current_dir;
+    Tab *current_tab = &state->tabs[state->current_tab];
+    char *current_dir = current_tab->current_dir;
 
     ImVec2 button_size= ImVec2(20, 20);
     ImVec2 image_button_size = ImVec2(14, 14);
 
-    if (ImGui::ImageButton(state->tex_back.id, image_button_size)) {
+    if (ImGui::ImageButton(state->tex_back.id, image_button_size) ||
+        (!ImGui::IsAnyItemActive() && // @note: just incase
+         ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Backspace))))
+    {
         go_back(state);
     }
     ImGui::SameLine();
@@ -213,21 +255,22 @@ void path_bar (App_State *state)
     ImGui::SameLine();
 
     float start_x = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
-    static bool editing = false;
-    if (editing) {
+    if (current_tab->editing) {
         bool init = false;
         if (!ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked(0)) {
             ImGui::SetKeyboardFocusHere();
             init = true;
         }
-        if (ImGui::InputText("##Path Input",
+        char temp[32];
+        snprintf(temp, 32, "Path Input##input%d", state->tabs[state->current_tab].id);
+        if (ImGui::InputText(temp,
                              current_dir,
                              PATH_MAX_SIZE,
                              ImGuiInputTextFlags_EnterReturnsTrue |
                              ImGuiInputTextFlags_AutoSelectAll) ||
             (ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()))
         {
-            editing = false;
+            current_tab->editing = false;
 
             // @note: if the path is a valid folder (no trailing word after slash)
             if (get_last_slash(current_dir)[0] == '\0') {
@@ -252,22 +295,22 @@ void path_bar (App_State *state)
         folder = strtok_s(temp_path, "\\", &ctx);
         while (folder) {
             if (start) {
-                ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
+                // ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
             }
 
             char *next_folder = strtok_s(NULL, "\\", &ctx);
             if (!next_folder) {
-                ImGui::PopStyleColor();
+                // ImGui::PopStyleColor();
             }
             if (ImGui::Button(folder)) {
                 char *backslash = folder;
                 while (*backslash) backslash++;
                 current_dir[backslash - temp_path + 1] = '\0';
-                printf("%s\n", current_dir);
+                // printf("%s\n", current_dir);
                 add_back(state);
             }
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                editing = true;
+                current_tab->editing = true;
             }
             ImGui::SameLine(0, 0);
 
@@ -282,7 +325,7 @@ void path_bar (App_State *state)
         // Edit
         ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
         if (ImGui::ImageButton(state->tex_edit.id, image_button_size)) {
-            editing = true;
+            current_tab->editing = true;
         }
         ImGui::PopStyleColor();
     }
@@ -315,7 +358,7 @@ void set_style (App_State *state)
 // @analyze: cache this, and update every so often?
 void files_and_folders (App_State *state)
 {
-    char *current_dir = state->current_dir;
+    char *current_dir = state->tabs[state->current_tab].current_dir;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
@@ -370,7 +413,7 @@ void files_and_folders (App_State *state)
     static char prev_path[MAX_PATH];
     if (strcmp(prev_path, current_dir) != 0) {
         ImGui::SetScrollHereY(0);
-        state->selected_count = 0;
+        state->tabs[state->current_tab].selected_count = 0;
 
         strcpy_s(prev_path, current_dir);
     }
@@ -391,8 +434,8 @@ void files_and_folders (App_State *state)
         }
 
         int found = -1;
-        for (int j = 0; j < state->selected_count; j++) {
-            if (state->selected[j] != i) continue;
+        for (int j = 0; j < state->tabs[state->current_tab].selected_count; j++) {
+            if (state->tabs[state->current_tab].selected[j] != i) continue;
 
             ImGui::PushStyleColor(ImGuiCol_Button, state->theme.files_selected_button);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -457,13 +500,13 @@ void files_and_folders (App_State *state)
         if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
             if (ImGui::GetIO().KeyShift) {
                 if (found > -1) {
-                    state->selected[found] = state->selected[state->selected_count-- - 1];
+                    state->tabs[state->current_tab].selected[found] = state->tabs[state->current_tab].selected[state->tabs[state->current_tab].selected_count-- - 1];
                 } else {
-                    state->selected[state->selected_count++] = i;
+                    state->tabs[state->current_tab].selected[state->tabs[state->current_tab].selected_count++] = i;
                 }
             } else {
-                state->selected_count = 0;
-                state->selected[state->selected_count++] = i;
+                state->tabs[state->current_tab].selected_count = 0;
+                state->tabs[state->current_tab].selected[state->tabs[state->current_tab].selected_count++] = i;
             }
 
             is_selecting = true;
@@ -491,8 +534,8 @@ void files_and_folders (App_State *state)
         if (ImGui::IsItemHovered() &&
             ImGui::IsMouseClicked(1))
         {
-            state->selected_count = 0;
-            state->selected[state->selected_count++] = i;
+            state->tabs[state->current_tab].selected_count = 0;
+            state->tabs[state->current_tab].selected[state->tabs[state->current_tab].selected_count++] = i;
             ImGui::OpenPopup("File Context");
         }
 
@@ -508,14 +551,14 @@ void files_and_folders (App_State *state)
         ImGui::IsWindowHovered() &&
         ImGui::IsMouseClicked(1))
     {
-        state->selected_count = 0;
+        state->tabs[state->current_tab].selected_count = 0;
         ImGui::OpenPopup("File Context");
     }
 
     bool del = false;
     ImVec2 main_icon_size = ImVec2(20, 20);
     if (ImGui::BeginPopup("File Context")) {
-        if (state->selected_count > 0) {
+        if (state->tabs[state->current_tab].selected_count > 0) {
             bool close = false;
             if (ImGui::ImageButton(state->tex_copy.id, main_icon_size)) close = true;
             ImGui::SameLine();
@@ -533,17 +576,17 @@ void files_and_folders (App_State *state)
             ImGui::Separator();
 
             if (ImGui::MenuItem("Open") &&
-                state->selected_count == 1) {
+                state->tabs[state->current_tab].selected_count == 1) {
                 char temp_path[MAX_PATH];
                 char *last_backslash = get_last_slash(current_dir);
                 int last_backslash_count = last_backslash - current_dir;
                 strncpy_s(temp_path, current_dir, last_backslash_count);
 
-                if (state->selected[0] < folder_count) {
-                    snprintf(current_dir, PATH_MAX_SIZE, "%s%s\\", temp_path, folders[state->selected[0]]);
+                if (state->tabs[state->current_tab].selected[0] < folder_count) {
+                    snprintf(current_dir, PATH_MAX_SIZE, "%s%s\\", temp_path, folders[state->tabs[state->current_tab].selected[0]]);
                     add_back(state);
                 } else {
-                    strcat_s(temp_path, PATH_MAX_SIZE, files[state->selected[0] - folder_count]);
+                    strcat_s(temp_path, PATH_MAX_SIZE, files[state->tabs[state->current_tab].selected[0] - folder_count]);
                     ShellExecute(NULL, NULL, temp_path, NULL, NULL, SW_SHOW);
                 }
             }
@@ -618,13 +661,13 @@ void files_and_folders (App_State *state)
         ImGui::IsMouseClicked(0) &&
         !is_selecting)
     {
-        state->selected_count = 0;
+        state->tabs[state->current_tab].selected_count = 0;
     }
 }
 
 void navigation (App_State *state)
 {
-    char *current_dir = state->current_dir;
+    char *current_dir = state->tabs[state->current_tab].current_dir;
 
     static bool show_quick_access = true;
     static bool show_this_pc = true;
@@ -722,10 +765,6 @@ void app (SDL_Window *window)
     style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
 
     App_State state;
-    int current_dir_len = IM_ARRAYSIZE(state.current_dir);
-
-    strcpy_s(state.current_dir, "D:\\");
-    add_back(&state);
 
     strcpy_s(state.quick_access[state.quick_access_count++], "Recycle Bin");
     strcpy_s(state.quick_access[state.quick_access_count++], "KULIAH");
@@ -772,6 +811,8 @@ void app (SDL_Window *window)
                 event.window.event == SDL_WINDOWEVENT_CLOSE &&
                 event.window.windowID == SDL_GetWindowID(window)) run = false;
         }
+
+        state.current_tab = -1;
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
@@ -853,10 +894,8 @@ void app (SDL_Window *window)
                 ImGui::EndMainMenuBar();
             }
 
-            static ImVector<int> active_tabs;
-            static int next_tab_id = 0;
-            if (active_tabs.Size == 0) {
-                active_tabs.push_back(next_tab_id++);
+            if (state.tab_count == 0) {
+                add_tab(&state);
             }
 
             // Tabs
@@ -871,22 +910,24 @@ void app (SDL_Window *window)
                                          ImGuiTabItemFlags_Trailing |
                                          ImGuiTabItemFlags_NoTooltip))
                 {
-                    active_tabs.push_back(next_tab_id++);
+                    add_tab(&state);
+                    // active_tabs.push_back(next_tab_id++);
                 }
 
-                for (int i = 0; i < active_tabs.Size;) {
+                for (int i = 0; i < TAB_MAX_COUNT; i++) {
+                    if (state.tabs[i].id == 0) continue;
+
+                    state.current_tab = i;
+
                     bool open = true;
 
                     char tab_name[32];
 
-                    char *last_folder = state.current_dir;
+                    char *last_folder = state.tabs[state.current_tab].current_dir;
                     char *temp = last_folder;
                     while (*temp) {
                         if (*temp == '\\') {
                             if (*(temp + 1) == '\0') {
-                                char temp_name[32];
-                                snprintf(temp_name, 16, "%.*s", (int) (temp - last_folder), last_folder);
-                                snprintf(tab_name, 32, "%s###tab%d", temp_name, i);
                                 break;
                             } else {
                                 last_folder = temp + 1;
@@ -894,13 +935,22 @@ void app (SDL_Window *window)
                         }
                         temp++;
                     }
+                    char temp_name[32];
+                    snprintf(temp_name, 16, "%.*s", (int) (temp - last_folder), last_folder);
+                    snprintf(tab_name, 32, "%s###tab%d", temp_name, state.tabs[i].id);
 
                     if (ImGui::BeginTabItem(tab_name, &open)) {
+                        // ImGui::BeginChild("Path Bar",
+                        //                   ImVec2(ImGui::GetContentRegionAvail().x,
+                        //                          0),
+                        //                   false);
                         path_bar(&state);
+                        // ImGui::EndChild();
                         ImGui::Separator();
 
                         if (state.show_navigation_panel) {
-                            ImGui::BeginChild("Navigation",
+                            // @todo: turn this into normal window
+                            ImGui::BeginChild("Navigation##Global",
                                               ImVec2(ImGui::GetContentRegionAvail().x * 0.2f,
                                                      ImGui::GetContentRegionAvail().y),
                                               false);
@@ -913,16 +963,14 @@ void app (SDL_Window *window)
                         ImGui::BeginChild("Files and Folders",
                                           ImVec2(ImGui::GetContentRegionAvail().x,
                                                  ImGui::GetContentRegionAvail().y),
-                                          true);
+                                          false);
                         files_and_folders(&state);
                         ImGui::EndChild();
 
                         ImGui::EndTabItem();
                     }
                     if (!open) {
-                        active_tabs.erase(active_tabs.Data + i);
-                    } else {
-                        i++;
+                        remove_tab(&state, i);
                     }
                 }
 

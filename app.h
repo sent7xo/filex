@@ -55,13 +55,15 @@ struct Undo_History {
 #define SELECTED_MAX_COUNT 1024
 
 struct Tab {
-    uint id;
+    uint id = 0;
 
     char current_dir[PATH_MAX_SIZE];
     Back_History back;
 
     int selected[SELECTED_MAX_COUNT];
     int selected_count = 0;
+
+    bool editing = false;
 };
 
 struct Texture {
@@ -77,15 +79,20 @@ namespace Layout {
     };
 };
 
+#define TAB_MAX_COUNT 32
 struct App_State {
     char exe_path[PATH_MAX_SIZE];
 
+    // @note: since Tab struct contains a LOT of strings,
+    // copying can be a problem (slow). this is the best
+    // solution i came up with, maybe there's a better way?
     uint tab_gen_id = 1; // @note: 0 is invalid
-    uint tab_indices[32];
-    Tab tabs[32];
+    // uint tab_indices[TAB_MAX_COUNT];
+    Tab tabs[TAB_MAX_COUNT];
     uint tab_count = 0;
+    uint current_tab = -1;
 
-    char current_dir[PATH_MAX_SIZE];
+    // char current_dir[PATH_MAX_SIZE];
 
     char quick_access[32][PATH_MAX_SIZE];
     uint quick_access_count = 0;
@@ -121,10 +128,10 @@ struct App_State {
     Texture tex_delete;
 
     // @todo: binary tree?
-    int selected[SELECTED_MAX_COUNT];
-    int selected_count = 0;
+    // int selected[SELECTED_MAX_COUNT];
+    // int selected_count = 0;
 
-    Back_History back;
+    // Back_History back;
 
     Theme theme;
 };
