@@ -1,6 +1,5 @@
 #ifndef APP_H
 
-
 #define PATH_MAX_SIZE 256
 #define WIN32_PATH_MAX_SIZE MAX_PATH
 
@@ -53,10 +52,16 @@ struct Undo_History {
     Action history[HISTORY_MAX_COUNT];
     int count = 0;
 };
+#define SELECTED_MAX_COUNT 1024
 
 struct Tab {
+    uint id;
+
     char current_dir[PATH_MAX_SIZE];
     Back_History back;
+
+    int selected[SELECTED_MAX_COUNT];
+    int selected_count = 0;
 };
 
 struct Texture {
@@ -64,16 +69,32 @@ struct Texture {
     int width, height;
 };
 
-#define SELECTED_MAX_COUNT 1024
+namespace Layout {
+    enum Enum {
+        ICONS,
+        LIST,
+        COUNT,
+    };
+};
+
 struct App_State {
+    char exe_path[PATH_MAX_SIZE];
+
+    uint tab_gen_id = 1; // @note: 0 is invalid
+    uint tab_indices[32];
+    Tab tabs[32];
+    uint tab_count = 0;
+
     char current_dir[PATH_MAX_SIZE];
 
     char quick_access[32][PATH_MAX_SIZE];
     uint quick_access_count = 0;
 
+    bool show_navigation_panel = true;
     bool show_hidden_files = true;
     bool show_tab_list_popup_button = true;
-    bool list_view = false; // @todo: make enum
+    bool list_view = false; // @todo: replace with layout
+    // Layout::Enum layout = Layout::ICONS;
 
     Texture tex_wallpaper;
 

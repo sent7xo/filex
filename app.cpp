@@ -1,11 +1,11 @@
-Texture init_texture(char *path, int type = GL_RGBA)
+Texture get_texture(char *path, int type = GL_RGBA)
 {
     Texture tex;
 
     int channels = 0; // ignore
     uchar *image = stbi_load(path, &tex.width, &tex.height, &channels, 0);
     if (!image) {
-        printf("Failed to load texture: %s\n", path);
+        printf("File doesn't exists: %s\n", path);
         assert(false);
     }
 
@@ -25,6 +25,13 @@ Texture init_texture(char *path, int type = GL_RGBA)
     tex.id = (ImTextureID)(intptr_t)id;
 
     return tex;
+}
+
+Texture get_app_texture (App_State *state, char *path, int type = GL_RGBA)
+{
+    char temp[PATH_MAX_SIZE];
+    snprintf(temp, PATH_MAX_SIZE, "%s\\data\\%s", state->exe_path, path);
+    return get_texture(temp, type);
 }
 
 bool file_button (ImTextureID id, char *text, ImVec2 image_size)
@@ -237,13 +244,17 @@ void path_bar (App_State *state)
     } else {
         ImGui::SameLine(start_x, 0);
 
-        ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
         char temp_path[256];
         strcpy_s(temp_path, current_dir);
 
+        bool start = true;
         char *folder, *ctx;
         folder = strtok_s(temp_path, "\\", &ctx);
         while (folder) {
+            if (start) {
+                ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
+            }
+
             char *next_folder = strtok_s(NULL, "\\", &ctx);
             if (!next_folder) {
                 ImGui::PopStyleColor();
@@ -301,7 +312,7 @@ void set_style (App_State *state)
 
 #define FILENAME_MAX_COUNT 512
 #define FILENAME_MAX_SIZE 64
-// @todo: cache this, and update every so often
+// @analyze: cache this, and update every so often?
 void files_and_folders (App_State *state)
 {
     char *current_dir = state->current_dir;
@@ -325,6 +336,9 @@ void files_and_folders (App_State *state)
         ImGui::TextWrapped("Invalid Path!");
         ImGui::PopStyleColor();
         ImGui::TextWrapped("Might be because the path doesn't exist or Filex doesn't have the permission to access it.");
+
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(2);
         return;
     }
     defer { FindClose(file_handle); };
@@ -719,27 +733,33 @@ void app (SDL_Window *window)
 
     set_style(&state);
 
-    state.tex_folder = init_texture("D:\\programming\\c_cpp\\filex\\data\\FOLDERS.png");
-    state.tex_file = init_texture("D:\\programming\\c_cpp\\filex\\data\\file.png");
-    state.tex_edit = init_texture("D:\\programming\\c_cpp\\filex\\data\\edit.png");
-    state.tex_back = init_texture("D:\\programming\\c_cpp\\filex\\data\\back.png");
-    state.tex_forward = init_texture("D:\\programming\\c_cpp\\filex\\data\\forward.png");
-    state.tex_up = init_texture("D:\\programming\\c_cpp\\filex\\data\\up.png");
-    state.tex_file_exe = init_texture("D:\\programming\\c_cpp\\filex\\data\\exe.png");
-    state.tex_file_txt = init_texture("D:\\programming\\c_cpp\\filex\\data\\txt.png");
-    state.tex_file_mp3 = init_texture("D:\\programming\\c_cpp\\filex\\data\\mp3.png");
-    state.tex_file_mp4 = init_texture("D:\\programming\\c_cpp\\filex\\data\\mp4.png");
-    state.tex_file_image = init_texture("D:\\programming\\c_cpp\\filex\\data\\image.png");
-    state.tex_file_zip = init_texture("D:\\programming\\c_cpp\\filex\\data\\zip.png");
-    state.tex_file_word = init_texture("D:\\programming\\c_cpp\\filex\\data\\word.png");
+    // @note: executable's folder path
+    GetModuleFileName(NULL, state.exe_path, PATH_MAX_SIZE);
+    *(get_last_slash(state.exe_path) - 1) = '\0';
+    *(get_last_slash(state.exe_path)) = '\0';
+    printf(state.exe_path);
 
-    state.tex_copy = init_texture("D:\\programming\\c_cpp\\filex\\data\\copy.png");
-    state.tex_paste = init_texture("D:\\programming\\c_cpp\\filex\\data\\paste.png");
-    state.tex_rename = init_texture("D:\\programming\\c_cpp\\filex\\data\\rename.png");
-    state.tex_cut = init_texture("D:\\programming\\c_cpp\\filex\\data\\cut.png");
-    state.tex_delete = init_texture("D:\\programming\\c_cpp\\filex\\data\\delete.png");
+    state.tex_folder     = get_app_texture(&state, "FOLDERS.png");
+    state.tex_file       = get_app_texture(&state, "file.png");
+    state.tex_edit       = get_app_texture(&state, "edit.png");
+    state.tex_back       = get_app_texture(&state, "back.png");
+    state.tex_forward    = get_app_texture(&state, "forward.png");
+    state.tex_up         = get_app_texture(&state, "up.png");
+    state.tex_file_exe   = get_app_texture(&state, "exe.png");
+    state.tex_file_txt   = get_app_texture(&state, "txt.png");
+    state.tex_file_mp3   = get_app_texture(&state, "mp3.png");
+    state.tex_file_mp4   = get_app_texture(&state, "mp4.png");
+    state.tex_file_image = get_app_texture(&state, "image.png");
+    state.tex_file_zip   = get_app_texture(&state, "zip.png");
+    state.tex_file_word  = get_app_texture(&state, "word.png");
 
-    state.tex_wallpaper = init_texture("D:\\programming\\c_cpp\\filex\\data\\wallpaper0.png");
+    state.tex_copy   = get_app_texture(&state, "copy.png");
+    state.tex_paste  = get_app_texture(&state, "paste.png");
+    state.tex_rename = get_app_texture(&state, "rename.png");
+    state.tex_cut    = get_app_texture(&state, "cut.png");
+    state.tex_delete = get_app_texture(&state, "delete.png");
+
+    state.tex_wallpaper = get_app_texture(&state, "wallpaper0.png");
 
     bool run = true;
     while (run) {
@@ -767,8 +787,7 @@ void app (SDL_Window *window)
             ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoSavedSettings;
 
-        ImGui::Begin("Main", NULL, main_window_flags);
-        {
+        if (ImGui::Begin("Main", NULL, main_window_flags)) {
             // Background
             {
                 ImDrawList *draw_list = ImGui::GetWindowDrawList();
@@ -806,7 +825,11 @@ void app (SDL_Window *window)
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Settings")) {
-                    ImGui::MenuItem("Files and Folders", NULL, false, false);
+                    ImGui::MenuItem("View", NULL, false, false);
+                    ImGui::MenuItem("Show navigation panel",
+                                    "",
+                                    &state.show_navigation_panel);
+                    // ImGui::MenuItem("Files and Folders", NULL, false, false);
                     ImGui::MenuItem("Show in list view",
                                     "",
                                     &state.list_view);
@@ -856,8 +879,6 @@ void app (SDL_Window *window)
 
                     char tab_name[32];
 
-                    // @todo: we can't change tab's name willynilly
-#if 1
                     char *last_folder = state.current_dir;
                     char *temp = last_folder;
                     while (*temp) {
@@ -873,22 +894,21 @@ void app (SDL_Window *window)
                         }
                         temp++;
                     }
-#else
-                    snprintf(tab_name, 16, "%d", i);
-#endif
 
                     if (ImGui::BeginTabItem(tab_name, &open)) {
                         path_bar(&state);
                         ImGui::Separator();
 
-                        ImGui::BeginChild("Navigation",
-                                          ImVec2(ImGui::GetContentRegionAvail().x * 0.2f,
-                                                 ImGui::GetContentRegionAvail().y),
-                                          false);
-                        navigation(&state);
-                        ImGui::EndChild();
+                        if (state.show_navigation_panel) {
+                            ImGui::BeginChild("Navigation",
+                                              ImVec2(ImGui::GetContentRegionAvail().x * 0.2f,
+                                                     ImGui::GetContentRegionAvail().y),
+                                              false);
+                            navigation(&state);
+                            ImGui::EndChild();
 
-                        ImGui::SameLine();
+                            ImGui::SameLine();
+                        }
 
                         ImGui::BeginChild("Files and Folders",
                                           ImVec2(ImGui::GetContentRegionAvail().x,
@@ -911,11 +931,11 @@ void app (SDL_Window *window)
 
             // ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
             // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
         }
         ImGui::End();
 
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
 
         // -------- RENDER
         ImGui::Render();

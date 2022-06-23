@@ -1,14 +1,16 @@
 #include <stdio.h>
 
-#define IMGUI_DEFINE_MATH_OPERATORS
 #include "third_party/dear_imgui/imgui.h"
 #include "third_party/dear_imgui/imgui_impl_sdl.h"
 #include "third_party/dear_imgui/imgui_impl_opengl3.h"
+
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "third_party/dear_imgui/imgui_internal.h"
 
 #define SDL_MAIN_HANDLED
 #include "third_party/sdl/SDL.h"
-#if defined(IMGUI_IMPL_OPENGL_ES2)
+
+#ifdef IMGUI_IMPL_OPENGL_ES2
 #include "third_party/sdl/SDL_opengles2.h"
 #else
 #include "third_party/sdl/SDL_opengl.h"
@@ -36,7 +38,7 @@
 #else
 #endif
 
-int main(int, char**)
+int main ()
 {
     SDL_SetMainReady();
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
