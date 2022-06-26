@@ -79,9 +79,18 @@ namespace Layout {
     };
 };
 
+struct Group {
+    char location[PATH_MAX_SIZE];
+    char files_and_folder[32][64];
+    uint count;
+};
+
 #define TAB_MAX_COUNT 32
 struct App_State {
+    char start_path[64] = "C:\\";
+    char wallpaper[PATH_MAX_SIZE];
     char exe_path[PATH_MAX_SIZE];
+
 
     // @note: since Tab struct contains a LOT of strings,
     // copying can be a problem (slow). this is the best
@@ -92,18 +101,32 @@ struct App_State {
     uint tab_count = 0;
     uint current_tab = -1;
 
+    Group groups[32];
+    uint group_count;
+
     // char current_dir[PATH_MAX_SIZE];
+    char favorites[32][PATH_MAX_SIZE];
+    uint favorite_count = 0;
+    int selected_fav_index = 0;
 
-    char quick_access[32][PATH_MAX_SIZE];
-    uint quick_access_count = 0;
+    char (*copy)[PATH_MAX_SIZE];
+    int copy_count = 0;
+    bool cut = false;
 
+    bool open_search = false;
     bool show_navigation_panel = true;
     bool show_hidden_files = true;
     bool show_tab_list_popup_button = true;
     bool list_view = false; // @todo: replace with layout
+
+    bool path_invalid = false;
     // Layout::Enum layout = Layout::ICONS;
 
     Texture tex_wallpaper;
+    Texture tex_wallpaper0;
+    Texture tex_wallpaper1;
+    Texture tex_wallpaper2;
+    Texture tex_wallpaper3;
 
     Texture tex_folder;
     Texture tex_file;
@@ -120,12 +143,14 @@ struct App_State {
     Texture tex_forward;
     Texture tex_up;
     Texture tex_edit;
+    Texture tex_search;
 
     Texture tex_copy;
     Texture tex_paste;
     Texture tex_rename;
     Texture tex_cut;
     Texture tex_delete;
+    Texture tex_favorite;
 
     // @todo: binary tree?
     // int selected[SELECTED_MAX_COUNT];

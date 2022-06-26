@@ -3,6 +3,7 @@ libs/
 inc/
 
 *.ini
+settings.filex
 
 data/
 third_party/

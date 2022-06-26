@@ -17,6 +17,7 @@
 #endif
 
 // @todo: put these in win32_app.cpp
+#include <commdlg.h>
 #include <shlobj_core.h>
 #include <shellapi.h>
 
