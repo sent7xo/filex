@@ -3,6 +3,8 @@
 #define PATH_MAX_SIZE 256
 #define WIN32_PATH_MAX_SIZE MAX_PATH
 
+#define SETTINGS_FILENAME "settings.filex"
+
 struct Theme {
     ImVec4 path_button;
     ImVec4 path_button_hover;
@@ -80,12 +82,17 @@ namespace Layout {
 };
 
 struct Group {
+    uint id = 0;
+    char name[64];
     char location[PATH_MAX_SIZE];
-    char files_and_folder[32][64];
-    uint count;
+    char folders[32][64];
+    uint count = 0;
+
+    Group *next = NULL;
 };
 
 #define TAB_MAX_COUNT 32
+#define GROUP_MAX_COUNT 64
 struct App_State {
     char start_path[64] = "C:\\";
     char wallpaper[PATH_MAX_SIZE];
@@ -101,15 +108,16 @@ struct App_State {
     uint tab_count = 0;
     uint current_tab = -1;
 
-    Group groups[32];
-    uint group_count;
+    uint group_gen_id = 1;
+    Group groups[GROUP_MAX_COUNT];
+    // uint group_count;
 
     // char current_dir[PATH_MAX_SIZE];
     char favorites[32][PATH_MAX_SIZE];
     uint favorite_count = 0;
     int selected_fav_index = 0;
 
-    char (*copy)[PATH_MAX_SIZE];
+    char (*copy)[PATH_MAX_SIZE] = NULL;
     int copy_count = 0;
     bool cut = false;
 

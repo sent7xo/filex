@@ -1,22 +1,32 @@
-FEATURES:
-- multithreading
-- quick search
-- bookmarks
-- docking
-- proper tab
-- context menu
+TODO:
+- create thread
+- unicode
 
 BUGS:
 - if strlen from first backslash is == 0
 - if first letter is backslash, i.e. "\\a\\", going up causes error
-- if path is invalid, don't save
-- filename hover is clipped on the bottom of scroll
 
 
 
 
 
 
+DONE?:
+- quick search
+  - create a separate thread so we don't stall
+  - list the result in files panel
+  - fuzzy find
+- bookmarks
+  - make it as robust as possible
+- context menu
+  - clean the code
 
 DONE:
+- proper tab
 - fix path with 2+ backslash
+- filename hover is clipped on the bottom of scroll
+- if path is invalid, don't save
+
+SKIPPED:
+- docking
+  - don't know how to add custom trailing tab, skip for now

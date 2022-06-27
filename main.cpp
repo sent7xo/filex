@@ -20,6 +20,7 @@
 #include <commdlg.h>
 #include <shlobj_core.h>
 #include <shellapi.h>
+#include <shlwapi.h>
 
 // @note: untuk uint, uchar, dll.
 #include "../syn/syn_types.h"

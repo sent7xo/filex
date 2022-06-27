@@ -1,3 +1,6 @@
+#define CREATE_STRING(var, size, format, ...) char var[size]; \
+                                              snprintf(var, size, \
+                                                       format, __VA_ARGS__);
 bool win32_file_exists (char *path){
     DWORD attrib = GetFileAttributes(path);
     return (attrib != INVALID_FILE_ATTRIBUTES && !(attrib & FILE_ATTRIBUTE_DIRECTORY));
@@ -117,15 +120,20 @@ bool open_file_dialog (char path[MAX_PATH])
     return GetOpenFileName(&ofn) == TRUE;
 }
 
-Texture get_texture(char *path, int type = GL_RGBA)
+Texture get_texture(char *path)
 {
     Texture tex;
 
-    int channels = 0; // ignore
+    int channels = 0;
     uchar *image = stbi_load(path, &tex.width, &tex.height, &channels, 0);
     if (!image) {
         printf("File doesn't exists: %s\n", path);
         assert(false);
+    }
+
+    int type = GL_RGBA;
+    if (channels == 3) {
+        type = GL_RGB;
     }
 
     GLuint id;
@@ -146,11 +154,16 @@ Texture get_texture(char *path, int type = GL_RGBA)
     return tex;
 }
 
-Texture get_app_texture (App_State *state, char *path, int type = GL_RGBA)
+void change_wallpaper (App_State *state)
+{
+
+}
+
+Texture get_app_texture (App_State *state, char *path)
 {
     char temp[PATH_MAX_SIZE];
     snprintf(temp, PATH_MAX_SIZE, "%s\\data\\%s", state->exe_path, path);
-    return get_texture(temp, type);
+    return get_texture(temp);
 }
 
 // @note: "C:\\\\test\\\\\" -> "C:\test\"
@@ -192,7 +205,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     const ImGuiStyle& style = g.Style;
 
     ImVec2 padding = style.FramePadding;
-    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, false, image_size.x - padding.x);
+    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, true, image_size.x - padding.x);
     ImVec2 button_size = ImVec2(image_size.x, image_size.y + (text_size.y < 30 ? text_size.y : 30));
 
     result = ImGui::InvisibleButton(text, button_size + padding * 2);
@@ -239,16 +252,25 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     draw_list->AddImage(id,
                         p + padding + ImVec2(offset, 0),
                         p + image_size - padding + ImVec2(offset, 0));
-    ImVec4 clipping = ImVec4(p.x + padding.x,
-                             p.y + padding.y,
-                             p.x + button_size.x - padding.x,
-                             p.y + button_size.y + g.FontSize / 2 - padding.y);
+    ImVec4 clipping = ImVec4(p.x,
+                             p.y,
+                             p.x + button_size.x,
+                             p.y + button_size.y + g.FontSize / 2);
 
+    char *cursor = text;
+    while (*cursor) {
+        if (*cursor == '#' && *(cursor + 1) == '#') {
+            break;
+        }
+
+        cursor++;
+    }
+    CREATE_STRING(temp_text, PATH_MAX_SIZE, "%.*s", (int) (cursor - text), text);
     draw_list->AddText(g.Font,
                        g.FontSize,
                        ImVec2(p.x + padding.x, p.y + image_size.y),
                        ImGui::GetColorU32(ImGuiCol_Text),
-                       text,
+                       temp_text,
                        NULL,
                        button_size.x - padding.x,
                        hover ? NULL : &clipping);
@@ -492,8 +514,7 @@ void path_bar (App_State *state)
         if (ImGui::InputText(temp,
                              current_dir,
                              PATH_MAX_SIZE,
-                             ImGuiInputTextFlags_EnterReturnsTrue |
-                             ImGuiInputTextFlags_AutoSelectAll) ||
+                             ImGuiInputTextFlags_EnterReturnsTrue) ||
             ((ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)) &&
              !ImGui::IsItemHovered()))
         {
@@ -601,13 +622,24 @@ void path_bar (App_State *state)
     }
 }
 
+int group_hash_func (char *str)
+{
+    int result = 0;
+    int len = strlen(str);
+    for (int i = 0; i < len; i++) {
+        result += str[i] * 7 + result * 31;
+    }
+
+    return result % GROUP_MAX_COUNT;
+}
+
 #if 0
 bool group (App_State *state)
 {
     bool result = false;
 
     ImVec2 p = ImGui::GetCursorScreenPos();
-    ImVec2 s = ImVec2(
+    // ImVec2 s = ImVec2(
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
@@ -722,6 +754,27 @@ void paste(App_State *state)
     // @todo: implementation
 }
 
+Group *get_group (App_State *state)
+{
+    Group *result = NULL;
+
+    char *current_dir = state->tabs[state->current_tab].current_dir;
+    Group *group = &state->groups[group_hash_func(current_dir)];
+    if (strcmp(group->location, current_dir)) {
+        result = group;
+    } else {
+        Group *next = group->next;
+        for (; next; next = next->next) {
+            if (strcmp(next->location, current_dir)) {
+                result = next;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+
 #define FILENAME_MAX_COUNT 512
 #define FILENAME_MAX_SIZE 128
 // @analyze: cache this, and update every so often?
@@ -795,6 +848,65 @@ void files_and_folders (App_State *state)
     ImVec2 button_size = ImVec2(90, 90);
     float window_visible = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
     bool is_selecting = false;
+
+    {
+        Group *group = &state->groups[group_hash_func(current_dir)];
+
+        static uint group_opened_id = 0;
+        if (group != NULL && group->id != 0) {
+            bool first = false;
+
+            bool hover = false;
+            for (; group; group = group->next) {
+                if (strcmp(group->location, current_dir) != 0) continue;
+
+                if (first) {
+                    ImGui::SameLine();
+                }
+
+                if (group_opened_id == group->id) {
+                    for (int i = 0; i < group->count; i++) {
+                        ImGui::SameLine();
+                        file_button(state->tex_folder.id, group->folders[i], button_size);
+                        if (ImGui::IsItemHovered()) {
+                            hover = true;
+
+                            if (ImGui::IsMouseClicked(0)) {
+                                char temp_path[MAX_PATH];
+                                char *last_backslash = get_last_slash(current_dir);
+                                int last_backslash_count = last_backslash - current_dir;
+                                snprintf(temp_path, PATH_MAX_SIZE,
+                                         "%.*s%s",
+                                         last_backslash_count, current_dir,
+                                         group->folders[i]);
+
+                                open_file_or_folder(state, temp_path, true);
+                            }
+                        }
+                    }
+                }
+
+                if (group_opened_id != group->id) {
+                    CREATE_STRING(label, 64, "%s##%d", group->name, group->id);
+                    file_button(state->tex_folder.id, label, button_size);
+                    if (ImGui::IsItemHovered() &&
+                        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                        if (group_opened_id != group->id) group_opened_id = group->id;
+                        hover = true;
+                    }
+                }
+
+                first = true;
+            }
+
+            if (!hover) {
+                group_opened_id = 0;
+            }
+
+            ImGui::Separator();
+        }
+    }
+
     for (int i = 0; i < folder_count + file_count; i++) {
         bool is_folder = i < folder_count;
         char label[MAX_PATH];
@@ -870,7 +982,9 @@ void files_and_folders (App_State *state)
         }
 
         // @note: since ImGui::Button is delayed, we put it here
-        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
+        if (ImGui::IsItemHovered() &&
+            ImGui::IsMouseClicked(0))
+        {
             if (ImGui::GetIO().KeyShift) {
                 if (found > -1) {
                     current_tab->selected[found] = current_tab->selected[current_tab->selected_count-- - 1];
@@ -928,7 +1042,7 @@ void files_and_folders (App_State *state)
     ImGui::PopStyleVar(2);
 
     // @note: clicked outside any files/folders
-    if (!ImGui::IsPopupOpen("File Context") &&
+    if (!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
         ImGui::IsWindowHovered() &&
         ImGui::IsMouseClicked(1))
     {
@@ -937,6 +1051,9 @@ void files_and_folders (App_State *state)
     }
 
     bool del = false;
+    bool open_rename = false;
+    bool open_group_name = false;
+
     ImVec2 main_icon_size = ImVec2(20, 20);
     ImGui::SetNextWindowSize(ImVec2(190, 0));
     if (ImGui::BeginPopup("File Context")) {
@@ -944,6 +1061,9 @@ void files_and_folders (App_State *state)
             bool close = false;
 
             if (ImGui::ImageButton(state->tex_copy.id, main_icon_size)) {
+                if (state->copy) {
+                    free(state->copy);
+                }
                 state->copy = (char (*)[PATH_MAX_SIZE])malloc(current_tab->selected_count *
                                                sizeof(*state->copy));
                 state->copy_count = current_tab->selected_count;
@@ -974,6 +1094,7 @@ void files_and_folders (App_State *state)
             ImGui::SameLine();
 
             if (ImGui::ImageButton(state->tex_rename.id, main_icon_size)) {
+                open_rename = true;
                 close = true;
             }
             ImGui::SameLine();
@@ -1027,6 +1148,12 @@ void files_and_folders (App_State *state)
                 }
             }
 
+            if (button_with_icon(state->tex_folder.id, "New Group", button_size)) {
+                open_group_name = true;
+                close = true;
+            }
+
+
             // @todo: for files, we disable it for now
             if (is_folder &&
                 button_with_icon(state->tex_favorite.id, "Add to Favorites", button_size)) {
@@ -1047,6 +1174,8 @@ void files_and_folders (App_State *state)
 
             if (close) ImGui::CloseCurrentPopup();
         } else {
+            bool close = false;
+
             ImGui::BeginDisabled(true);
             ImGui::ImageButton(state->tex_copy.id, main_icon_size);
             ImGui::SameLine();
@@ -1055,6 +1184,7 @@ void files_and_folders (App_State *state)
             if (ImGui::ImageButton(state->tex_paste.id, main_icon_size)) {
                 // @note: copy_count > 0
                 paste(state);
+                close = true;
             }
             ImGui::SameLine();
 
@@ -1068,24 +1198,35 @@ void files_and_folders (App_State *state)
 
             ImGui::Separator();
 
-            ImVec2 context_icon_size = ImVec2(16, 16);
-            ImGui::Image(state->tex_file.id, context_icon_size);
-            ImGui::SameLine();
-            ImGui::MenuItem("New File");
+            ImGuiStyle &style = ImGui::GetStyle();
+            float width = ImGui::GetContentRegionAvail().x - 25;
+            if (button_with_icon(state->tex_file.id, "New File", ImVec2(width, 0))) {
+                close = true;
+            }
 
-            ImGui::Image(state->tex_folder.id, context_icon_size);
-            ImGui::SameLine();
-            ImGui::MenuItem("New Folder");
-
-            ImGui::Separator();
-
-            ImGui::MenuItem("Show in list view", "", &state->list_view);
+            if (button_with_icon(state->tex_folder.id, "New Folder", ImVec2(width, 0))) {
+                close = true;
+            }
 
             ImGui::Separator();
 
-            // ImGui::Image(state->tex_folder.id, context_button_size);
-            // ImGui::SameLine();
-            ImGui::MenuItem("Properties");
+            if (button_with_icon(state->tex_folder.id,
+                                 "Show in list view",
+                                 ImVec2(width, 0)))
+            {
+                state->list_view = !state->list_view;
+                close = true;
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::Button("Properties",
+                              ImVec2(ImGui::GetContentRegionAvail().x, 0)))
+            {
+                close = true;
+            }
+
+            if (close) ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
@@ -1094,19 +1235,49 @@ void files_and_folders (App_State *state)
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal("Delete", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("Delete",
+                               NULL,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoMove))
+    {
         ImGui::Text("Are you sure?\n\n");
-        ImGui::Separator();
-
         static bool dont_ask_me_next_time = false;
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-        ImGui::Checkbox("Don't ask me next time", &dont_ask_me_next_time);
-        ImGui::PopStyleVar();
+        ImGui::Checkbox("Don't ask for this session", &dont_ask_me_next_time);
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8, 0, 0, 1));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0, 0, 1));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 0, 0, 1));
-        if (ImGui::Button("OK", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        if (ImGui::Button("OK", ImVec2(120, 0))) {
+            int index = current_tab->selected[current_tab->selected_count - 1];
+            char temp_path[PATH_MAX_SIZE];
+            char *last_backslash = get_last_slash(current_dir);
+            int last_backslash_count = last_backslash - current_dir;
+            char *name = index < folder_count ? folders[index] : files[index - folder_count];
+            snprintf(temp_path, PATH_MAX_SIZE, "%.*s%s", last_backslash_count, current_dir, name);
+
+            wchar_t filename[PATH_MAX_SIZE];
+            MultiByteToWideChar(CP_UTF8, 0, temp_path, PATH_MAX_SIZE, filename, PATH_MAX_SIZE);
+
+            IShellItem *shell_item = NULL;
+            if (SHCreateItemFromParsingName(filename,
+                                            NULL,
+                                            IID_PPV_ARGS(&shell_item)) == S_OK)
+            {
+                IFileOperation *operation;
+                if (CoCreateInstance(CLSID_FileOperation,
+                                     NULL,
+                                     CLSCTX_ALL,
+                                     IID_PPV_ARGS(&operation)) == S_OK)
+                {
+                    operation->SetOperationFlags(FOF_ALLOWUNDO | FOF_WANTNUKEWARNING);
+                    operation->DeleteItem(shell_item, NULL);
+                    operation->PerformOperations();
+                }
+                shell_item->Release();
+            }
+
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::PopStyleColor(3);
         ImGui::SetItemDefaultFocus();
 
@@ -1115,8 +1286,133 @@ void files_and_folders (App_State *state)
         if (ImGui::Button("Cancel", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
         ImGui::EndPopup();
     }
+
+    if (open_rename) {
+        ImGui::OpenPopup("Rename");
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Rename",
+                               NULL,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoMove))
+    {
+        static char rename_name[64];
+        if (open_rename) {
+            int index = current_tab->selected[current_tab->selected_count - 1];
+            strcpy_s(rename_name, index < folder_count ? folders[index] : files[index - folder_count]);
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        bool enter = ImGui::InputText("##Rename Input",
+                                      rename_name,
+                                      64,
+                                      ImGuiInputTextFlags_EnterReturnsTrue);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0.8, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 1, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 1, 0, 1));
+        if (ImGui::Button("OK", ImVec2(120, 0)) || enter) {
+            int index = current_tab->selected[current_tab->selected_count - 1];
+            char temp_path[PATH_MAX_SIZE];
+            char *last_backslash = get_last_slash(current_dir);
+            int last_backslash_count = last_backslash - current_dir;
+            char *name = index < folder_count ? folders[index] : files[index - folder_count];
+
+            snprintf(temp_path, PATH_MAX_SIZE, "%.*s%s", last_backslash_count, current_dir, name);
+            wchar_t old_name[PATH_MAX_SIZE];
+            MultiByteToWideChar(CP_UTF8, 0, temp_path, PATH_MAX_SIZE, old_name, PATH_MAX_SIZE);
+
+            // @todo: PathStripPathW probably just gets the filename,
+            // so we don't need to concat current_dir
+            snprintf(temp_path, PATH_MAX_SIZE, "%.*s%s", last_backslash_count, current_dir, rename_name);
+            wchar_t new_name[PATH_MAX_SIZE];
+            MultiByteToWideChar(CP_UTF8, 0, temp_path, PATH_MAX_SIZE, new_name, PATH_MAX_SIZE);
+            PathStripPathW(new_name);
+
+            IShellItem *shell_item = NULL;
+            if (SHCreateItemFromParsingName(old_name,
+                                            NULL,
+                                            IID_PPV_ARGS(&shell_item)) == S_OK)
+            {
+                IFileOperation *operation;
+                if (CoCreateInstance(CLSID_FileOperation,
+                                     NULL,
+                                     CLSCTX_ALL,
+                                     IID_PPV_ARGS(&operation)) == S_OK)
+                {
+                    operation->SetOperationFlags(FOF_ALLOWUNDO | FOF_SILENT);
+                    operation->RenameItem(shell_item, new_name, NULL);
+                    operation->PerformOperations();
+                }
+                shell_item->Release();
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::SetItemDefaultFocus();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+
+    if (open_group_name) ImGui::OpenPopup("Group Name");
+
+    if (ImGui::BeginPopupModal("Group Name")) {
+        static char group_name[64];
+        if (open_group_name) {
+            strcpy_s(group_name, "New Group");
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        bool enter = ImGui::InputText("##Group Name Input",
+                                      group_name,
+                                      64,
+                                      ImGuiInputTextFlags_EnterReturnsTrue);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0.8, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 1, 0, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 1, 0, 1));
+        if (ImGui::Button("OK", ImVec2(120, 0)) || enter) {
+            Group *group = &state->groups[group_hash_func(current_dir)];
+            if (group->id != 0) {
+                Group *next = group;
+                for (; next->next; next = next->next) {}
+                assert(next->next == NULL);
+                next->next = (Group *) malloc(sizeof(Group));
+                group = next->next;
+                *group = {};
+            }
+            group->id = state->group_gen_id++;
+            strcpy_s(group->name, group_name);
+            strcpy_s(group->location, current_dir);
+
+            for (int i = 0; i < current_tab->selected_count; i++) {
+                int index = current_tab->selected[i];
+                bool is_folder = index < folder_count;
+                snprintf(group->folders[i], 64, is_folder ? folders[index] : files[index - folder_count]);
+            }
+            group->count = current_tab->selected_count;
+            current_tab->selected_count = 0;
+
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::SetItemDefaultFocus();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+
+
     // @note: klik di luar buttons
-    if (!ImGui::IsPopupOpen("File Context") &&
+    if (!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
         ImGui::IsMouseClicked(0) &&
         !is_selecting)
     {
@@ -1238,7 +1534,7 @@ void navigation (App_State *state)
     ImGui::Separator();
 }
 
-size_t read_file(char *&buffer, char *path)
+size_t read_file (char *&buffer, char *path)
 {
     FILE *file;
     fopen_s(&file, path, "r");
@@ -1273,8 +1569,6 @@ char *our_strcat (char *src, char *str, char *start = NULL)
 
     return cursor;
 }
-
-#define SETTINGS_FILENAME "settings.filex"
 
 // @todo: quick and dirty parser
 void load_settings (App_State *state)
@@ -1361,8 +1655,7 @@ void load_settings (App_State *state)
         }
         cursor++;
     }
-    int type = strcmp(extension, "png") == 0 ? GL_RGBA : GL_RGB;
-    tex_wallpaper = get_texture(wallpaper, type);
+    tex_wallpaper = get_texture(wallpaper);
     if (tex_wallpaper.id == 0) {
         state->tex_wallpaper = get_app_texture(state, "wallpaper0.png");
         snprintf(state->wallpaper, PATH_MAX_SIZE, "%sdata\\wallpaper0.png", state->exe_path);
@@ -1372,6 +1665,7 @@ void load_settings (App_State *state)
     }
 }
 
+#if 0
 struct Writer {
     char *buffer;
     size_t buffer_size;
@@ -1380,7 +1674,6 @@ struct Writer {
     int count;
 };
 
-#define SETTINGS_MAX_SIZE 8192
 void write (Writer *writer, char *format, ...)
 {
     va_list va;
@@ -1399,14 +1692,16 @@ void write (Writer *writer, char *format, ...)
     writer->cursor += written;
     va_end(va);
 }
+#endif
 
+#define SETTINGS_MAX_SIZE 8192
 void save_settings (App_State *state)
 {
     char *filename = SETTINGS_FILENAME;
     char temp_path[PATH_MAX_SIZE];
     snprintf(temp_path, PATH_MAX_SIZE, "%s\\%s", state->exe_path, filename);
 
-    Writer writer = {};
+    // Writer writer = {};
 
     char buffer[SETTINGS_MAX_SIZE];
     char *ptr = buffer;
@@ -1456,8 +1751,17 @@ void save_settings (App_State *state)
     fclose(file);
 }
 
+// uint WINAPI thread_proc (void *parameter)
+// {
+//     return 0;
+// }
+
 void app (SDL_Window *window)
 {
+    // @todo: create new thread for search
+    // uint thread_id = 0;
+    // HANDLE thread_handle = CreateThread(NULL, 0, thread_proc, 0, &thread_id);
+
     bool show_demo_window = true;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -1549,6 +1853,11 @@ void app (SDL_Window *window)
                 ImDrawList *draw_list = ImGui::GetWindowDrawList();
                 ImVec2 p = ImGui::GetWindowPos();
                 ImVec2 s = ImGui::GetWindowSize();
+                if (state.tex_wallpaper.height * (s.x / state.tex_wallpaper.width) < s.y) {
+                    s.x = state.tex_wallpaper.width * (s.y / state.tex_wallpaper.height);
+                } else {
+                    s.y = state.tex_wallpaper.height * (s.x / state.tex_wallpaper.width);
+                }
                 draw_list->PushClipRectFullScreen();
                 draw_list->AddImage(state.tex_wallpaper.id,
                                     p,
@@ -1594,10 +1903,9 @@ void app (SDL_Window *window)
                                 }
                                 cursor++;
                             }
-                            int type = strcmp(extension, "png") == 0 ? GL_RGBA : GL_RGB;
 
                             Texture tex_wallpaper = {};
-                            tex_wallpaper = get_texture(filename, type);
+                            tex_wallpaper = get_texture(filename);
                             if (tex_wallpaper.id != 0) {
                                 glDeleteTextures(1,
                                                  &((GLuint)(intptr_t) state.tex_wallpaper.id));
@@ -1686,12 +1994,14 @@ void app (SDL_Window *window)
                     snprintf(tab_name, 32, "%s###tab%d", temp_name, state.tabs[i].id);
 
                     if (ImGui::BeginTabItem(tab_name, &open)) {
+                        // Path
                         ImGui::BeginChild("Path Bar",
                                           ImVec2(0, 20));
                         path_bar(&state);
                         ImGui::EndChild();
                         ImGui::Separator();
 
+                        // Navigation
                         if (state.show_navigation_panel) {
                             // @todo: turn this into normal window
                             ImGui::BeginChild("Navigation##Global",
@@ -1704,6 +2014,7 @@ void app (SDL_Window *window)
                             ImGui::SameLine();
                         }
 
+                        // Files and Folders
                         ImGui::BeginChild("Files and Folders",
                                           ImVec2(ImGui::GetContentRegionAvail().x,
                                                  ImGui::GetContentRegionAvail().y),
