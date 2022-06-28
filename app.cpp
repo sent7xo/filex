@@ -120,6 +120,57 @@ bool open_file_dialog (char path[MAX_PATH])
     return GetOpenFileName(&ofn) == TRUE;
 }
 
+void text_centered (char *text, ImVec2 p, ImVec2 s, bool clip = true)
+{
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    ImGuiContext& g = *GImGui;
+    ImGuiStyle& style = g.Style;
+
+    char *text_end = text + strlen(text);
+
+    const char *cursor = text;
+    const char *word_wrap_eol = NULL;
+
+    ImVec4 clipping = ImVec4(p.x,
+                             p.y,
+                             p.x + s.x,
+                             p.y + s.y);
+    // if (clip) {
+    //     draw_list->PushClipRect(ImVec2(p.x, p.y), ImVec2(p.x + s.x, p.y + 10), true);
+    // }
+
+    int line = 0;
+    while (cursor < text_end) {
+        word_wrap_eol = g.Font->ImFont::CalcWordWrapPositionA(1,
+                                                              cursor,
+                                                              text_end,
+                                                              s.x);
+        if (word_wrap_eol == cursor) {
+            word_wrap_eol++;
+        }
+        if (*cursor == ' ') {
+            cursor++;
+        }
+
+        float offset = (s.x - ImGui::CalcTextSize(cursor, word_wrap_eol, true, s.x).x) / 2;
+        draw_list->AddText(g.Font,
+                           g.FontSize,
+                           ImVec2(p.x + offset, p.y + line * g.FontSize),
+                           ImGui::GetColorU32(ImGuiCol_Text),
+                           cursor,
+                           word_wrap_eol,
+                           s.x,
+                           clip ? &clipping : NULL);
+
+        cursor = word_wrap_eol;
+        line++;
+    }
+
+    // if (clip) {
+    //     ImGui::PopClipRect();
+    // }
+}
+
 Texture get_texture(char *path)
 {
     Texture tex;
@@ -205,7 +256,7 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
     const ImGuiStyle& style = g.Style;
 
     ImVec2 padding = style.FramePadding;
-    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, true, image_size.x - padding.x);
+    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, true, image_size.x - padding.x * 2);
     ImVec2 button_size = ImVec2(image_size.x, image_size.y + (text_size.y < 30 ? text_size.y : 30));
 
     result = ImGui::InvisibleButton(text, button_size + padding * 2);
@@ -265,15 +316,17 @@ bool file_button (ImTextureID id, char *text, ImVec2 image_size)
 
         cursor++;
     }
-    CREATE_STRING(temp_text, PATH_MAX_SIZE, "%.*s", (int) (cursor - text), text);
-    draw_list->AddText(g.Font,
-                       g.FontSize,
-                       ImVec2(p.x + padding.x, p.y + image_size.y),
-                       ImGui::GetColorU32(ImGuiCol_Text),
-                       temp_text,
-                       NULL,
-                       button_size.x - padding.x,
-                       hover ? NULL : &clipping);
+    CREATE_STRING(temp_text, PATH_MAX_SIZE,
+                  "%.*s", (int) (cursor - text), text);
+    text_centered(temp_text, ImVec2(p.x + padding.x, p.y + image_size.y), ImVec2(button_size.x, button_size.y - image_size.y), !hover);
+    // draw_list->AddText(g.Font,
+    //                    g.FontSize,
+    //                    ImVec2(p.x + padding.x, p.y + image_size.y),
+    //                    ImGui::GetColorU32(ImGuiCol_Text),
+    //                    temp_text,
+    //                    NULL,
+    //                    button_size.x - padding.x,
+    //                    hover ? NULL : &clipping);
 
     if (hover) {
         draw_list->PopClipRect();
@@ -774,6 +827,60 @@ Group *get_group (App_State *state)
     return result;
 }
 
+void group_button (ImTextureID id, char *text, ImVec2 image_size)
+{
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+
+    ImVec2 padding = style.FramePadding;
+    ImVec2 text_size = ImGui::CalcTextSize(text, NULL, true, image_size.x - padding.x);
+    ImVec2 button_size = ImVec2(image_size.x, image_size.y + (text_size.y < 30 ? text_size.y : 30));
+
+    ImGui::InvisibleButton(text, button_size + padding * 2);
+
+    bool hover = ImGui::IsItemHovered() &&
+                 (!ImGui::IsAnyItemActive() || ImGui::IsItemActive());
+    bool click = ImGui::IsItemClicked(0);
+    ImU32 col = ImGui::GetColorU32((hover && click) ? ImGuiCol_ButtonActive :
+                                   hover ? ImGuiCol_ButtonHovered :
+                                   ImGuiCol_Button);
+
+    draw_list->AddRectFilled(p,
+                             ImVec2(p.x + button_size.x + padding.x * 2,
+                                    p.y + (hover ? image_size.y + text_size.y : button_size.y) + padding.y * 2),
+                             col,
+                             ImClamp((float)ImMin(padding.x, padding.y), 0.0f, g.Style.FrameRounding));
+
+    float offset = padding.x;
+    draw_list->AddImage(id,
+                        p + padding + ImVec2(offset, 0),
+                        p + image_size - padding + ImVec2(offset, 0));
+    ImVec4 clipping = ImVec4(p.x,
+                             p.y,
+                             p.x + button_size.x,
+                             p.y + button_size.y + g.FontSize / 2);
+
+    char *cursor = text;
+    while (*cursor) {
+        if (*cursor == '#' && *(cursor + 1) == '#') {
+            break;
+        }
+
+        cursor++;
+    }
+    CREATE_STRING(temp_text, PATH_MAX_SIZE, "%.*s", (int) (cursor - text), text);
+    draw_list->AddText(g.Font,
+                       g.FontSize,
+                       ImVec2(p.x + padding.x, p.y + image_size.y),
+                       ImGui::GetColorU32(ImGuiCol_Text),
+                       temp_text,
+                       NULL,
+                       button_size.x - padding.x,
+                       hover ? NULL : &clipping);
+}
+
 
 #define FILENAME_MAX_COUNT 512
 #define FILENAME_MAX_SIZE 128
@@ -856,7 +963,8 @@ void files_and_folders (App_State *state)
         if (group != NULL && group->id != 0) {
             bool first = false;
 
-            bool hover = false;
+            ImVec2 p = ImVec2(0, 0);
+            bool open = false;
             for (; group; group = group->next) {
                 if (strcmp(group->location, current_dir) != 0) continue;
 
@@ -864,11 +972,51 @@ void files_and_folders (App_State *state)
                     ImGui::SameLine();
                 }
 
+                ImVec2 temp = ImGui::GetCursorScreenPos();
+                CREATE_STRING(label, 64, "%s##%d", group->name, group->id);
+                group_button(state->tex_folder.id, label, button_size);
+                if (group_opened_id != group->id &&
+                    ImGui::IsItemHovered() &&
+                    !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId))
+                {
+                    if (group_opened_id != group->id) group_opened_id = group->id;
+                    open = true;
+                }
+
                 if (group_opened_id == group->id) {
+                    p = temp - ImGui::GetStyle().WindowPadding;
+                }
+
+                first = true;
+            }
+
+            static int skip_frames = 0;
+            if (open) {
+                ImGui::OpenPopup("Group Hover");
+                skip_frames = 0;
+            }
+
+            if (group_opened_id != 0) {
+                Group *group = &state->groups[group_hash_func(current_dir)];
+                for (; group; group = group->next) {
+                    if (group_opened_id == group->id) {
+                        break;
+                    }
+                }
+                ImGui::SetNextWindowFocus();
+                ImGui::SetNextWindowBgAlpha(1);
+                ImGui::SetNextWindowPos(p);
+                ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
+                                         ImGuiWindowFlags_NoMove |
+                                         ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_AlwaysAutoResize |
+                                         ImGuiWindowFlags_NoScrollbar |
+                                         ImGuiWindowFlags_NoSavedSettings;
+                if (ImGui::BeginPopup("Group Hover", flags)) {
+                    bool hover = false;
                     for (int i = 0; i < group->count; i++) {
-                        ImGui::SameLine();
                         file_button(state->tex_folder.id, group->folders[i], button_size);
-                        if (ImGui::IsItemHovered()) {
+                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
                             hover = true;
 
                             if (ImGui::IsMouseClicked(0)) {
@@ -881,26 +1029,20 @@ void files_and_folders (App_State *state)
                                          group->folders[i]);
 
                                 open_file_or_folder(state, temp_path, true);
+                                group_opened_id = 0;
+                                ImGui::CloseCurrentPopup();
                             }
                         }
                     }
-                }
 
-                if (group_opened_id != group->id) {
-                    CREATE_STRING(label, 64, "%s##%d", group->name, group->id);
-                    file_button(state->tex_folder.id, label, button_size);
-                    if (ImGui::IsItemHovered() &&
-                        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
-                        if (group_opened_id != group->id) group_opened_id = group->id;
-                        hover = true;
+                    if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) && skip_frames > 8)
+                    {
+                        group_opened_id = 0;
+                        ImGui::CloseCurrentPopup();
                     }
+                    skip_frames++;
+                    ImGui::EndPopup();
                 }
-
-                first = true;
-            }
-
-            if (!hover) {
-                group_opened_id = 0;
             }
 
             ImGui::Separator();
@@ -1844,7 +1986,9 @@ void app (SDL_Window *window)
         ImGuiWindowFlags main_window_flags = ImGuiWindowFlags_NoDecoration |
             ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+            ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoBringToFrontOnFocus |
+            ImGuiWindowFlags_NoFocusOnAppearing;
 
         if (ImGui::Begin("Main", NULL, main_window_flags)) {
             // ImGui::DockSpace(ImGui::GetID("Main Dock"), ImVec2(0, 0), ImGuiDockNodeFlags_KeepAliveOnly);
