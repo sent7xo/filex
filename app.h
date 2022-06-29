@@ -81,11 +81,12 @@ namespace Layout {
     };
 };
 
+#define GROUP_FOLDER_MAX_COUNT 32
 struct Group {
     uint id = 0;
     char name[64];
     char location[PATH_MAX_SIZE];
-    char folders[32][64];
+    char folders[GROUP_FOLDER_MAX_COUNT][64];
     uint count = 0;
 
     Group *next = NULL;
@@ -126,6 +127,7 @@ struct App_State {
     bool show_hidden_files = true;
     bool show_tab_list_popup_button = true;
     bool list_view = false; // @todo: replace with layout
+    bool light_mode = false;
 
     bool path_invalid = false;
     // Layout::Enum layout = Layout::ICONS;
@@ -150,8 +152,10 @@ struct App_State {
     Texture tex_back;
     Texture tex_forward;
     Texture tex_up;
+    Texture tex_down;
     Texture tex_edit;
     Texture tex_search;
+    Texture tex_info;
 
     Texture tex_copy;
     Texture tex_paste;
