@@ -129,7 +129,7 @@ ImTextureID get_file_tex (App_State *state, char *extension)
     if (strcmp(extension, "exe") == 0) {
         id = state->tex_file_exe.id;
     } else if (strcmp(extension, "txt") == 0) {
-        id = state->tex_file_txt.id;
+        id = state->light_mode ? state->tex_file_txt_dark.id : state->tex_file_txt.id;
     } else if (strcmp(extension, "mp3") == 0) {
         id = state->tex_file_mp3.id;
     } else if (strcmp(extension, "mp4") == 0) {
@@ -201,7 +201,7 @@ void text_centered (char *text, ImVec2 p, ImVec2 s, bool clip = true)
 
 Texture get_texture(char *path)
 {
-    Texture tex;
+    Texture tex = {};
 
     int channels = 0;
     uchar *image = stbi_load(path, &tex.width, &tex.height, &channels, 0);
@@ -213,6 +213,8 @@ Texture get_texture(char *path)
     int type = GL_RGBA;
     if (channels == 3) {
         type = GL_RGB;
+    } else if (channels != 4) {
+        return tex;
     }
 
     GLuint id;
@@ -538,18 +540,24 @@ void path_bar (App_State *state)
     ImVec2 image_button_size = ImVec2(14, 14);
 
     ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
-    if (ImGui::ImageButton(state->tex_back.id, image_button_size) ||
+    if (ImGui::ImageButton(state->light_mode ? state->tex_back_dark.id :
+                                               state->tex_back.id,
+                           image_button_size) ||
         (!ImGui::IsAnyItemActive() && // @note: just incase
          ImGui::IsKeyPressed(ImGuiKey_Backspace)))
     {
         go_back(state);
     }
     ImGui::SameLine();
-    if (ImGui::ImageButton(state->tex_forward.id, image_button_size)) {
+    if (ImGui::ImageButton(state->light_mode ? state->tex_forward_dark.id :
+                                               state->tex_forward.id,
+                           image_button_size)) {
         go_forward(state);
     }
     ImGui::SameLine();
-    if (ImGui::ImageButton(state->tex_up.id, image_button_size)) {
+    if (ImGui::ImageButton(state->light_mode ? state->tex_up_dark.id :
+                                               state->tex_up.id,
+                           image_button_size)) {
         char *first_folder = current_dir;
         char *second_to_last_folder = current_dir;
         char *temp = current_dir;
@@ -686,14 +694,17 @@ void path_bar (App_State *state)
         ImGui::PushStyleColor(ImGuiCol_Button, state->theme.path_button);
 
         // Edit
-        if (ImGui::ImageButton(state->tex_edit.id, image_button_size)) {
+        if (ImGui::ImageButton(state->light_mode ? state->tex_edit_dark.id :
+                                                   state->tex_edit.id,
+                               image_button_size)) {
             current_tab->editing = true;
         }
 
         ImGui::SameLine();
 
         // Search
-        if (button_with_icon(state->tex_search.id,
+        if (button_with_icon(state->light_mode ? state->tex_search_dark.id :
+                                                 state->tex_search.id,
                              "Search",
                              ImVec2(0, image_button_size.y))) {
             state->open_search = true;
@@ -1382,7 +1393,9 @@ void files_and_folders (App_State *state)
             bool close = false;
 
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-            if (ImGui::ImageButton(state->tex_copy.id, main_icon_size)) {
+            if (ImGui::ImageButton(state->light_mode ? state->tex_copy_dark.id :
+                                                       state->tex_copy.id,
+                                   main_icon_size)) {
                 // @todo
                 if (state->copy) {
                     free(state->copy);
@@ -1411,20 +1424,26 @@ void files_and_folders (App_State *state)
             }
             ImGui::SameLine();
 
-            if (ImGui::ImageButton(state->tex_cut.id, main_icon_size)) {
+            if (ImGui::ImageButton(state->light_mode ? state->tex_cut_dark.id :
+                                                       state->tex_cut.id,
+                                                   main_icon_size)) {
                 // @todo
                 state->cut = false;
                 close = true;
             }
             ImGui::SameLine();
 
-            if (ImGui::ImageButton(state->tex_paste.id, main_icon_size)) {
+            if (ImGui::ImageButton(state->light_mode ? state->tex_paste_dark.id :
+                                                       state->tex_paste.id,
+                                   main_icon_size)) {
                 // @todo
                 close = true;
             }
             ImGui::SameLine();
 
-            if (ImGui::ImageButton(state->tex_rename.id, main_icon_size)) {
+            if (ImGui::ImageButton(state->light_mode ? state->tex_rename_dark.id :
+                                                       state->tex_rename.id,
+                                   main_icon_size)) {
                 open_rename = true;
                 close = true;
             }
@@ -1502,7 +1521,8 @@ void files_and_folders (App_State *state)
 
             ImGui::Separator();
 
-            if (button_with_icon(state->tex_info.id,
+            if (button_with_icon(state->light_mode ? state->tex_info_dark.id :
+                                                     state->tex_info.id,
                                  "Properties",
                                  button_size))
             {
@@ -1830,7 +1850,7 @@ void navigation (App_State *state)
 
         ImTextureID folder_tex[] = {
             state->tex_file_word.id,
-            state->tex_down.id,
+            state->light_mode ? state->tex_down_dark.id : state->tex_down.id,
             state->tex_file_mp3.id,
             state->tex_file_image.id,
             state->tex_file_mp4.id,
@@ -2165,15 +2185,23 @@ void app (SDL_Window *window)
         set_theme_dark(&state);
     }
 
-    state.tex_folder     = get_app_texture(&state, "folders.png");
-    state.tex_file       = get_app_texture(&state, "file.png");
-    state.tex_edit       = get_app_texture(&state, "edit.png");
-    state.tex_back       = get_app_texture(&state, "back.png");
-    state.tex_forward    = get_app_texture(&state, "forward.png");
-    state.tex_up         = get_app_texture(&state, "up.png");
-    state.tex_down       = get_app_texture(&state, "down.png");
-    state.tex_search     = get_app_texture(&state, "search.png");
-    state.tex_info       = get_app_texture(&state, "info.png");
+    state.tex_folder        = get_app_texture(&state, "folders.png");
+    state.tex_file          = get_app_texture(&state, "file.png");
+    state.tex_edit          = get_app_texture(&state, "edit.png");
+    state.tex_back          = get_app_texture(&state, "back.png");
+    state.tex_forward       = get_app_texture(&state, "forward.png");
+    state.tex_up            = get_app_texture(&state, "up.png");
+    state.tex_down          = get_app_texture(&state, "down.png");
+    state.tex_search        = get_app_texture(&state, "search.png");
+    state.tex_info          = get_app_texture(&state, "info.png");
+
+    state.tex_back_dark     = get_app_texture(&state, "backd.png");
+    state.tex_forward_dark  = get_app_texture(&state, "forwardd.png");
+    state.tex_up_dark       = get_app_texture(&state, "upd.png");
+    state.tex_down_dark     = get_app_texture(&state, "downd.png");
+    state.tex_edit_dark     = get_app_texture(&state, "editd.png");
+    state.tex_search_dark   = get_app_texture(&state, "searchd.png");
+    state.tex_info_dark     = get_app_texture(&state, "infod.png");
 
     state.tex_file_exe   = get_app_texture(&state, "exe.png");
     state.tex_file_txt   = get_app_texture(&state, "txt.png");
@@ -2189,6 +2217,13 @@ void app (SDL_Window *window)
     state.tex_cut    = get_app_texture(&state, "cut.png");
     state.tex_delete = get_app_texture(&state, "delete.png");
     state.tex_favorite = get_app_texture(&state, "favorite.png");
+
+    state.tex_copy_dark     = get_app_texture(&state, "copyd.png");
+    state.tex_paste_dark    = get_app_texture(&state, "pasted.png");
+    state.tex_rename_dark   = get_app_texture(&state, "renamed.png");
+    state.tex_cut_dark      = get_app_texture(&state, "cutd.png");
+
+    state.tex_file_txt_dark = get_app_texture(&state, "txtd.png");
 
     bool run = true;
     while (run) {
@@ -2369,8 +2404,59 @@ void app (SDL_Window *window)
 
             ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             if (ImGui::BeginPopupModal("Documentation", NULL, flags)) {
-                ImGui::TextWrapped("hi");
-                ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                ImGui::BeginChild("Category", ImVec2(175, 300));
+
+                static const int MENU = 0;
+                static const int NAV = 1;
+                static const int PATH = 2;
+                static const int FILES = 3;
+                static int content = MENU;
+                if (ImGui::Button("Menu")) content = MENU;
+                if (ImGui::Button("Navigation Panel")) content = NAV;
+                if (ImGui::Button("Path and Tab Panel")) content = PATH;
+                if (ImGui::Button("Files and Folders Panel")) content = FILES;
+                ImGui::EndChild();
+
+                ImGui::SameLine();
+
+                ImGui::BeginChild("Content", ImVec2(400, 300));
+
+                if (content == MENU) {
+                    ImGui::TextWrapped("MENU");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                    ImGui::TextWrapped("- File");
+                    ImGui::TextWrapped("New Tab untuk membuat tab baru, dan Exit untuk keluar dari aplikasi.");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+
+                    ImGui::TextWrapped("- Edit");
+                    ImGui::TextWrapped("Untuk Undo, Redo, Cut (potong), Copy (salin), Paste (tempel).");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+
+                    ImGui::TextWrapped("- Settings");
+                    ImGui::TextWrapped("Change Wallpaper (ganti wallpaper), Light Mode (mode terang), Show Navigation Panel (tampilkan panel navigasi), Show in List View (tampilan list), Show Hidden Files (tampilkan file yang tersembunyi), dan Show Tab List Popup Button (tampilkan tombol list tab).");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                    ImGui::TextWrapped("- Help");
+                    ImGui::TextWrapped("FAQ (pertanyaan yang sering ditanyakan), Documentation (You are Here!), dan About Filex (tentang aplikasi ini).");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                } else if (content == NAV) {
+                    ImGui::TextWrapped("NAVIGATION PANEL");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                    ImGui::TextWrapped("Panel ini menampilkan folder Favorites pengguna, Documents, Downloads, Music, Pictures, Videos, dan juga drive di komputer.");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                } else if (content == PATH) {
+                    ImGui::TextWrapped("PATH AND TAB PANEL");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                    ImGui::TextWrapped("Panel ini menunjukkan tab dan direktori pengguna. Pengguna dapat membuat tab baru atau pindah ke tab lain. Pengguna juga dapat mengubah path direktori pengguna dengan menekan tombol edit. Untuk mencari file, maka kita dapat menggunakan tombol Search. Terdapat juga tombol Back, Forward, Up, dan tombol path direktori (C: | Users | user | Documents).");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                } else if (content == FILES) {
+                    ImGui::TextWrapped("FILES AND FOLDERS PANEL");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                    ImGui::TextWrapped("Sesuai dengan setting \"Show in List View\", maka panel ini akan menampilkan file dan folder dalam tampilan ikon atau list.");
+                    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().FramePadding.y * 2));
+                }
+
+                ImGui::EndChild();
+
                 if (ImGui::Button("Close")) ImGui::CloseCurrentPopup();
                 ImGui::EndPopup();
             }

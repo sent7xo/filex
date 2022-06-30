@@ -5,3 +5,4 @@ mkdir filex
 xcopy /i data filex\data
 copy build\filex.exe filex
 copy libs\SDL2.dll filex\
+copy README_USER.txt filex\

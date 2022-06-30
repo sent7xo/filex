@@ -23,8 +23,8 @@
 #include <shlwapi.h>
 
 // @note: untuk uint, uchar, dll.
-#include "../syn/syn_types.h"
-#include "../syn/syn_defer.h"
+#include "syn_types.h"
+#include "syn_defer.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "third_party/stb_image.h"

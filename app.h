@@ -157,6 +157,19 @@ struct App_State {
     Texture tex_search;
     Texture tex_info;
 
+    Texture tex_back_dark;
+    Texture tex_forward_dark;
+    Texture tex_up_dark;
+    Texture tex_down_dark;
+    Texture tex_edit_dark;
+    Texture tex_search_dark;
+    Texture tex_info_dark;
+    Texture tex_copy_dark;
+    Texture tex_paste_dark;
+    Texture tex_rename_dark;
+    Texture tex_cut_dark;
+    Texture tex_file_txt_dark;
+
     Texture tex_copy;
     Texture tex_paste;
     Texture tex_rename;

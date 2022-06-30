@@ -1,6 +1,7 @@
 TODO:
 - create thread
 - unicode
+- save for show panel, show in list, etc
 
 BUGS:
 - if strlen from first backslash is == 0
