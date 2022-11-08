@@ -3,7 +3,7 @@ Dibuat menggunakan Dear ImGui dengan backend SDL2.
 Dikerjakan berkelompok sebagai UAS Mata Pelajaran Interaksi Manusia dan Komputer.
 
 ## Building
-Membutuhkan Microsoft Visual C++ (MSVC) dengan menginstall Visual Studio.
+Membutuhkan Microsoft Visual C++ (MSVC) dengan menginstall Visual Studio, SDL2, dan Dear ImGui.
 Edit `filex\build.bat` sesuai kebutuhan lalu jalankan.
 
 ## Running
