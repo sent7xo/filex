@@ -1,9 +1,7 @@
 @echo off
-:: gunakan folder build supaya folder filex tidak ada file kompilasi, debug, dll.
 if not exist build mkdir build
 pushd build
 
-:: opsional
 copy ..\libs\SDL2.dll .\
 
 set common_flags= -nologo -Zi -FC
@@ -26,7 +24,3 @@ cl %compiler_flags% -c %includes% ../third_party/dear_imgui/imgui*.cpp
 cl %compiler_flags% %includes% ..\main.cpp imgui*.obj /link /out:filex.exe %libraries% /subsystem:windows /entry:mainCRTStartup
 
 popd
-
-:: kita membutuhkan SDL2.dll untuk menjalankan aplikasi
-copy build\filex.exe .
-copy libs\SDL2.dll .
