@@ -1,6 +1,5 @@
 build/
 libs/
-inc/
 
 *.ini
 settings.filex

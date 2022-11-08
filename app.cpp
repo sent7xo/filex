@@ -1954,7 +1954,7 @@ void load_settings (App_State *state)
     char *settings_file;
     if (read_file(settings_file, SETTINGS_FILENAME) == 0) {
         state->tex_wallpaper = get_app_texture(state, "wallpaper0.png");
-        snprintf(state->wallpaper, PATH_MAX_SIZE, "%sdata\\wallpaper0.png", state->exe_path);
+        snprintf(state->wallpaper, PATH_MAX_SIZE, "%s\\data\\wallpaper0.png", state->exe_path);
 
         // fprintf(stderr, "Couldn't find \"%s\"\n", SETTINGS_FILENAME);
         return;
@@ -1999,6 +1999,7 @@ void load_settings (App_State *state)
                     } else if (strcmp(word_str, "wallpaper") == 0) {
                         word_str = strtok_s(NULL, "\n", &word_ctx);
                         strcpy_s(wallpaper, word_str);
+                        printf("%s\n", wallpaper);
                     } else if (strcmp(word_str, "light_mode") == 0) {
                         word_str = strtok_s(NULL, "\n", &word_ctx);
                         if (*word_str == '1') {
@@ -2043,7 +2044,7 @@ void load_settings (App_State *state)
     tex_wallpaper = get_texture(wallpaper);
     if (tex_wallpaper.id == 0) {
         state->tex_wallpaper = get_app_texture(state, "wallpaper0.png");
-        snprintf(state->wallpaper, PATH_MAX_SIZE, "%sdata\\wallpaper0.png", state->exe_path);
+        snprintf(state->wallpaper, PATH_MAX_SIZE, "%s\\data\\wallpaper0.png", state->exe_path);
     } else {
         state->tex_wallpaper = tex_wallpaper;
         strcpy_s(state->wallpaper, wallpaper);
